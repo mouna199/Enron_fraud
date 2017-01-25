@@ -22,6 +22,8 @@ with open("final_project_dataset.pkl", "r") as data_file:
 ### Task 2: Remove outliers
 data_dict.pop("TOTAL",0)
 
+"""
+#detecting outliers
 import matplotlib.pyplot
 features = ["salary", "bonus"]
 data = featureFormat(data_dict, features)
@@ -42,7 +44,7 @@ matplotlib.pyplot.xlabel("salary")
 matplotlib.pyplot.ylabel("bonus")
 matplotlib.pyplot.show()
 
-
+"""
 
 ### Task 3: Create new feature(s)
 for keys, values in data_dict.iteritems():
@@ -64,8 +66,10 @@ features_list.append("from_person")
 my_dataset = data_dict
 
 ### Extract features and labels f rom dataset for local testing
+#we split the data into features and labels
 data = featureFormat(my_dataset, features_list, sort_keys = True)
 labels, features = targetFeatureSplit(data)
+# use Kbest to select the best features 
 from sklearn.feature_selection import SelectKBest, f_classif
 kbest = SelectKBest(k=14)
 selected_features = kbest.fit_transform(features,labels)
@@ -76,6 +80,7 @@ features_rank = sorted(zip(features_list[1:], scores), key = lambda l: l[1],\
 print features_rank
 print 'Features selected by SelectKBest:'
 print features_selected
+# we only take out one feature to avoid correlatio and work with the rest of selected features
 features_list=['poi','salary', 'total_payments', 'loan_advances', 'bonus',
                'deferred_income', 'total_stock_value', 'expenses', 'exercised_stock_options',
                'other', 'long_term_incentive', 'restricted_stock', 'from_poi_to_this_person',
@@ -88,27 +93,29 @@ features_list=['poi','salary', 'total_payments', 'loan_advances', 'bonus',
 ### http://scikit-learn.org/stable/modules/pipeline.html
 
 # Provided to give you a starting point. Try a variety of classifiers.
-#splitting data
+# Naive bayes 
 from sklearn import decomposition
 from sklearn.model_selection import train_test_split
-features_train, features_test, labels_train, labels_test = \
-    train_test_split(features, labels, test_size=0.30, random_state=42)
-
-target_names = ["Not POI", "POI"]
-#working with the first classifier, naive bayes
 from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import classification_report
 from sklearn.cross_validation import StratifiedShuffleSplit
 from sklearn.model_selection import GridSearchCV
-clf = GaussianNB()
-clf.fit(features_train,labels_train)
-accuracy=clf.score(features_test,labels_test)
+#we split the data 
+features_train, features_test, labels_train, labels_test = \
+    train_test_split(features, labels, test_size=0.30, random_state=42)
+
+target_names = ["Not POI", "POI"]
+
+#working with the first classifier, naive bayes
+NB_clf = GaussianNB()
+NB_clf.fit(features_train,labels_train)
+accuracy=NB_clf.score(features_test,labels_test)
 print "accuracy",accuracy
-pred=clf.predict(features_test)
+pred=NB_clf.predict(features_test)
 print classification_report(y_true=labels_test, y_pred=pred, target_names=target_names)
 ######################################################################################################
 
-#### the second classifier
+#### the second classifier is Decision Tree
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline,FeatureUnion
@@ -118,32 +125,29 @@ from sklearn.decomposition import PCA
 from sklearn.cross_validation import StratifiedShuffleSplit
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.tree import DecisionTreeClassifier
-# this to classify features
 
 scaled = ()
 pca = PCA()
 scaled= MinMaxScaler()
-combined_transformers = FeatureUnion([ ("scale",scaled),
-("pca", pca)])
+combined_transformers = FeatureUnion([ ("scale",scaled),("pca", pca)])
 tree=tree.DecisionTreeClassifier()
 estimators = [("features", combined_transformers), ('tree',tree )]
 pipe= Pipeline(estimators)
-cv = StratifiedShuffleSplit(labels,100, random_state = 42)
+
 parameters = {'tree__max_features':['auto', 'sqrt', 'log2'], 'tree__splitter':['best'],'tree__class_weight':['balanced'],
                'tree__criterion':['gini'],'tree__min_samples_leaf':[2], 'tree__min_samples_split': [3,4,5,6,7,8],
               "features__pca__n_components": [2]}
+cv = StratifiedShuffleSplit(labels,100, random_state = 42)
+clf = GridSearchCV(pipe, parameters,n_jobs=-1,verbose=10,scoring='precision',cv=cv)
 
-CV_clf = GridSearchCV(pipe, parameters,n_jobs=-1,verbose=10,scoring='precision',cv=cv)
-
-CV_clf =CV_clf.fit(features, labels)
-CV_clf = CV_clf.best_estimator_
-print CV_clf
+clf =clf.fit(features, labels)
+clf = clf.best_estimator_
+print clf
 from tester import test_classifier
 print ' '
-# use test_classifier to evaluate the model
-# selected by GridSearchCV
+# use test_classifier to evaluate the model selected by GridSearchCV
 print "Tester Classification report"
-test_classifier(CV_clf, data_dict, features_list)
+test_classifier(clf, data_dict, features_list)
 
 ### Task 5: Tune your classifier to achieve better than .3 precision and recall
 ### using our testing script. Check the tester.py script in the final project
@@ -159,4 +163,4 @@ test_classifier(CV_clf, data_dict, features_list)
 ### check your results. You do not need to change anything below, but make sure
 ### that the version of poi_id.py that you submit can be run on its own and
 ### generates the necessary .pkl files for validating your results.
-dump_classifier_and_data(CV_clf, my_dataset, features_list)
+dump_classifier_and_data(clf, my_dataset, features_list)
